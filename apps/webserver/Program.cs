@@ -6,9 +6,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 
-builder.Services
-    .AddSingleton<CurrentData>()
-    .AddHostedService<EventItemWorker>();
+builder.Services.AddSingleton<CurrentData>();
+builder.Services.AddHostedService<EventItemWorker>();
+builder.Services.AddSignalR();
 
 var app = builder.Build();
 
@@ -19,5 +19,7 @@ var app = builder.Build();
 app.UseAuthorization();
 
 app.MapControllers();
+
+app.MapHub<EventsHub>("/Events");
 
 app.Run();

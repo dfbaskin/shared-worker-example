@@ -1,24 +1,40 @@
+using Microsoft.AspNetCore.SignalR;
+
 namespace WebServer;
 
 public sealed partial class EventItemWorker : BackgroundService
 {
     public EventItemWorker(
         CurrentData current,
+        IHubContext<EventsHub> eventsHub,
         ILogger<EventItemWorker> logger
     )
     {
         Current = current ?? throw new ArgumentNullException(nameof(current));
+        EventsHub = eventsHub ?? throw new ArgumentNullException(nameof(eventsHub));
         Logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public CurrentData Current { get; }
+    public IHubContext<EventsHub> EventsHub { get; }
     public ILogger<EventItemWorker> Logger { get; }
     private const int MaxItemCount = 50;
 
     protected override async Task ExecuteAsync(CancellationToken token)
     {
         var randGen = new Random();
-        Initialize();
+
+        await Task.Delay(2000, token);
+        if (token.IsCancellationRequested)
+        {
+            return;
+        }
+
+        await Initialize(token);
+        if (token.IsCancellationRequested)
+        {
+            return;
+        }
 
         while (!token.IsCancellationRequested)
         {
@@ -31,6 +47,7 @@ public sealed partial class EventItemWorker : BackgroundService
                     var item = NewEventItem();
                     Current.AddEventItem(item);
                     Logger.LogInformation($"Created {item}");
+                    await EventsHub.Clients.All.SendAsync("eventAdded", item.EventId, token);
                 }
             }
             else if (value < 0.20)
@@ -40,6 +57,7 @@ public sealed partial class EventItemWorker : BackgroundService
                     var item = items.ElementAt(Faker.RandomNumber.Next(items.Count - 1));
                     Current.RemoveEventItem(item);
                     Logger.LogInformation($"Removed {item}");
+                    await EventsHub.Clients.All.SendAsync("eventRemoved", item.EventId, token);
                 }
             }
             else
@@ -54,6 +72,7 @@ public sealed partial class EventItemWorker : BackgroundService
                     };
                     Current.UpdateEventItem(updated);
                     Logger.LogInformation($"Updated {updated}");
+                    await EventsHub.Clients.All.SendAsync("eventUpdated", updated.EventId, token);
                 }
             }
 
@@ -62,13 +81,14 @@ public sealed partial class EventItemWorker : BackgroundService
         }
     }
 
-    private void Initialize()
+    private async Task Initialize(CancellationToken token)
     {
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < 3 && !token.IsCancellationRequested; i++)
         {
             var item = NewEventItem();
             Current.AddEventItem(item);
             Logger.LogInformation($"Created {item}");
+            await EventsHub.Clients.All.SendAsync("eventAdded", item.EventId, token);
         }
     }
 

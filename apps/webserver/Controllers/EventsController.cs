@@ -20,4 +20,18 @@ public class EventsController : ControllerBase
     {
         return Current.EventItems;
     }
+
+    [HttpGet]
+    [Route("{id}")]
+    public ActionResult GetEventItem([FromRoute] string id)
+    {
+        var item = Current.EventItems
+            .Where(evt => string.Equals(id, evt.EventId, StringComparison.CurrentCultureIgnoreCase))
+            .FirstOrDefault();
+        if (item == null)
+        {
+            return NotFound();
+        }
+        return Ok(item);
+    }
 }
