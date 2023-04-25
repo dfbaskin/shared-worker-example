@@ -24,7 +24,7 @@ public sealed partial class EventItemWorker : BackgroundService
         {
             var value = randGen.NextSingle();
             var items = Current.EventItems.ToList();
-            if (value < 0.10)
+            if (value < 0.15)
             {
                 if (Current.EventItems.Count < MaxItemCount)
                 {
