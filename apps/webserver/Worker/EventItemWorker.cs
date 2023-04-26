@@ -47,7 +47,7 @@ public sealed partial class EventItemWorker : BackgroundService
                     var item = NewEventItem();
                     Current.AddEventItem(item);
                     Logger.LogInformation($"Created {item}");
-                    await EventsHub.Clients.All.SendAsync("eventAdded", item.EventId, token);
+                    await EventsHub.Clients.All.SendAsync("eventAdded", item, token);
                 }
             }
             else if (value < 0.20)
@@ -57,7 +57,7 @@ public sealed partial class EventItemWorker : BackgroundService
                     var item = items.ElementAt(Faker.RandomNumber.Next(items.Count - 1));
                     Current.RemoveEventItem(item);
                     Logger.LogInformation($"Removed {item}");
-                    await EventsHub.Clients.All.SendAsync("eventRemoved", item.EventId, token);
+                    await EventsHub.Clients.All.SendAsync("eventRemoved", item, token);
                 }
             }
             else
@@ -72,7 +72,7 @@ public sealed partial class EventItemWorker : BackgroundService
                     };
                     Current.UpdateEventItem(updated);
                     Logger.LogInformation($"Updated {updated}");
-                    await EventsHub.Clients.All.SendAsync("eventUpdated", updated.EventId, token);
+                    await EventsHub.Clients.All.SendAsync("eventUpdated", updated, token);
                 }
             }
 
@@ -88,7 +88,7 @@ public sealed partial class EventItemWorker : BackgroundService
             var item = NewEventItem();
             Current.AddEventItem(item);
             Logger.LogInformation($"Created {item}");
-            await EventsHub.Clients.All.SendAsync("eventAdded", item.EventId, token);
+            await EventsHub.Clients.All.SendAsync("eventAdded", item, token);
         }
     }
 
