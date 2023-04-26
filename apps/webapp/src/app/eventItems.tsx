@@ -1,16 +1,14 @@
 import { useEffect, useState } from 'react';
-import { startEventsManager, EventItem } from "@example/events";
+import { tap } from 'rxjs';
+import { eventsStream, EventItem } from '@example/events';
 import styles from './eventItems.module.scss';
 
 export function EventItems() {
   const [items, setItems] = useState<EventItem[]>([]);
 
   useEffect(() => {
-    return startEventsManager({
-      eventHubEndPoint: "http://localhost:33033/api/EventsHub",
-      allEventsEndPoint: "http://localhost:33033/api/events",
-      onEventsModified: setItems,
-    });
+    const subscription = eventsStream.pipe(tap(setItems)).subscribe();
+    return () => subscription.unsubscribe();
   }, []);
 
   return (

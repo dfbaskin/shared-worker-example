@@ -15,7 +15,8 @@
     "skipDefaultLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@example/events": ["libs/events/src/index.ts"]
+      "@example/events": ["libs/events/src/index.ts"],
+      "@example/events-worker": ["libs/events/src/lib/eventsManagerWorker.ts"]
     }
   },
   "exclude": ["node_modules", "tmp"]
