@@ -1,3 +1,4 @@
-export * from './lib/eventConfig';
 export * from './lib/eventItem';
-export * from './lib/eventsStream';
+export * from './lib/eventsStreamDataTypes';
+export { setEventsWorker } from './lib/eventsStream';
+export * from './lib/useEventItems';

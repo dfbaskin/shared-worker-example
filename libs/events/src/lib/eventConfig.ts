@@ -1,7 +1,7 @@
-import { EventItem } from './eventItem';
+import { EventsStreamDataTypes } from './eventsStreamDataTypes';
 
 export interface EventsConfig {
   allEventsEndPoint: string;
   eventHubEndPoint: string;
-  onEventsModified: (list: EventItem[]) => void;
+  eventsDataCallback: (eventsData: EventsStreamDataTypes) => void;
 }

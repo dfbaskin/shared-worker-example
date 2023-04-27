@@ -1,155 +1,170 @@
 import { EventsConfig } from './eventConfig';
 import { EventItem } from './eventItem';
 import * as signalR from '@microsoft/signalr';
+import { EventsStreamDataTypes } from './eventsStreamDataTypes';
 
-let eventMap = new Map<string, EventItem>();
-let onEventsModified: (list: EventItem[]) => void = () => {};
+interface MethodHandlers {
+  eventAdded: (item: EventItem) => void;
+  eventUpdated: (item: EventItem) => void;
+  eventRemoved: (item: EventItem) => void;
+}
 
-export function startEventsManager(config: EventsConfig) {
-  onEventsModified = config.onEventsModified;
-  const connection = createEventHubConnection(config.eventHubEndPoint);
-  let isEnabled = false;
-  runEventsManager(config, connection)
-    .then(() => {
-      console.log('Events manager running.');
-      isEnabled = true;
-    })
-    .catch((err) => {
-      console.error('Events manager stopped with error.');
-      console.error(err);
+export class EventsManager {
+  private enabled: boolean = false;
+  private connection?: signalR.HubConnection;
+  private methodHandlers?: MethodHandlers;
+  private eventItems: Map<string, EventItem> = new Map();
+
+  constructor(private config: EventsConfig) {}
+
+  async open() {
+    this.connection = this.createEventHubConnection();
+
+    const queue = this.queuedMethodHandlers();
+    this.setMethodHandlers(queue.handlers);
+
+    await this.connection.start();
+
+    const list = await this.getAllEvents();
+    this.eventItems = new Map(list.map((item) => [item.eventId, item]));
+    this.config.eventsDataCallback({
+      type: 'all-events',
+      list: this.getEventItems(),
     });
-  return () => {
-    onEventsModified = () => {};
-    eventMap = new Map();
-    if (isEnabled) {
-      connection.stop();
+
+    queue.flushQueue();
+    this.removeMethodHandlers();
+
+    const callbacks = this.callbackMethodHandlers();
+    this.setMethodHandlers(callbacks.handlers);
+    this.enabled = true;
+  }
+
+  async close() {
+    if (this.enabled && this.connection) {
+      this.removeMethodHandlers();
+      this.enabled = false;
+      this.eventItems.clear();
+      await this.connection.stop();
+      this.connection = undefined;
     }
-  };
-}
+  }
 
-function modifiedEvents() {
-  onEventsModified([...eventMap.values()]);
-}
+  getEventItems() {
+    return [...this.eventItems.values()];
+  }
 
-async function runEventsManager(
-  config: EventsConfig,
-  connection: signalR.HubConnection
-) {
-  const flushQueue = addUpdatesToQueue(connection);
+  private createEventHubConnection() {
+    return new signalR.HubConnectionBuilder()
+      .configureLogging(signalR.LogLevel.Debug)
+      .withUrl(this.config.eventHubEndPoint, {
+        skipNegotiation: true,
+        transport: signalR.HttpTransportType.WebSockets,
+      })
+      .build();
+  }
 
-  await connection.start();
-  console.log('SignalR connection started.');
-
-  await getAllEvents(config.allEventsEndPoint);
-  flushQueue();
-  console.log('Initial set of events retrieved.');
-
-  modifiedEvents();
-
-  return addUpdatesToMap(connection);
-}
-
-function createEventHubConnection(endPoint: string) {
-  return new signalR.HubConnectionBuilder()
-    .configureLogging(signalR.LogLevel.Debug)
-    .withUrl(endPoint, {
-      skipNegotiation: true,
-      transport: signalR.HttpTransportType.WebSockets,
-    })
-    .build();
-}
-
-type QueueItem =
-  | {
-      added: EventItem;
-    }
-  | {
-      updated: EventItem;
-    }
-  | {
-      removed: EventItem;
-    };
-
-function isAddedItem(qi: QueueItem): qi is {
-  added: EventItem;
-} {
-  return qi.hasOwnProperty('added');
-}
-function isUpdatedItem(qi: QueueItem): qi is {
-  updated: EventItem;
-} {
-  return qi.hasOwnProperty('updated');
-}
-function isRemovedItem(qi: QueueItem): qi is {
-  removed: EventItem;
-} {
-  return qi.hasOwnProperty('removed');
-}
-
-function addUpdatesToQueue(connection: signalR.HubConnection) {
-  const queue: QueueItem[] = [];
-  const onAdd = (item: EventItem) => {
-    queue.push({
-      added: item,
-    });
-  };
-  const onUpdate = (item: EventItem) => {
-    queue.push({
-      updated: item,
-    });
-  };
-  const onRemove = (item: EventItem) => {
-    queue.push({
-      removed: item,
-    });
-  };
-  connection.on('eventAdded', onAdd);
-  connection.on('eventUpdated', onUpdate);
-  connection.on('eventRemoved', onRemove);
-  return () => {
-    for (const qi of queue) {
-      if (isAddedItem(qi)) {
-        eventMap.set(qi.added.eventId, qi.added);
-      } else if (isUpdatedItem(qi)) {
-        eventMap.set(qi.updated.eventId, qi.updated);
-      } else if (isRemovedItem(qi)) {
-        eventMap.delete(qi.removed.eventId);
+  private setMethodHandlers(handlers: MethodHandlers) {
+    if (this.connection) {
+      this.methodHandlers = handlers;
+      for (const [methodName, callback] of Object.entries(
+        this.methodHandlers
+      )) {
+        this.connection.on(methodName, callback);
       }
     }
-    connection.off('eventAdded', onAdd);
-    connection.off('eventUpdated', onUpdate);
-    connection.off('eventRemoved', onRemove);
-  };
-}
-
-function addUpdatesToMap(connection: signalR.HubConnection) {
-  const onAdd = (item: EventItem) => {
-    eventMap.set(item.eventId, item);
-    modifiedEvents();
-  };
-  const onUpdate = (item: EventItem) => {
-    eventMap.set(item.eventId, item);
-    modifiedEvents();
-  };
-  const onRemove = (item: EventItem) => {
-    eventMap.delete(item.eventId);
-    modifiedEvents();
-  };
-  connection.on('eventAdded', onAdd);
-  connection.on('eventUpdated', onUpdate);
-  connection.on('eventRemoved', onRemove);
-  return () => {
-    connection.off('eventAdded', onAdd);
-    connection.off('eventUpdated', onUpdate);
-    connection.off('eventRemoved', onRemove);
-  };
-}
-
-async function getAllEvents(endPoint: string) {
-  const rsp = await fetch(endPoint);
-  if (!rsp.ok) {
-    throw new Error(`HTTP error ${rsp.status} ${rsp.statusText}`);
   }
-  const data: EventItem[] = await rsp.json();
-  eventMap = new Map(data.map((item) => [item.eventId, item]));
+
+  private removeMethodHandlers() {
+    if (this.connection && this.methodHandlers) {
+      for (const [methodName, callback] of Object.entries(
+        this.methodHandlers
+      )) {
+        this.connection.off(methodName, callback);
+      }
+      this.methodHandlers = undefined;
+    }
+  }
+
+  private queuedMethodHandlers() {
+    const queuedMessages: EventsStreamDataTypes[] = [];
+    const eventAdded = (item: EventItem) => {
+      queuedMessages.push({
+        type: 'added-event',
+        item,
+      });
+    };
+    const eventUpdated = (item: EventItem) => {
+      queuedMessages.push({
+        type: 'updated-event',
+        item,
+      });
+    };
+    const eventRemoved = (item: EventItem) => {
+      queuedMessages.push({
+        type: 'removed-event',
+        itemId: item.eventId,
+      });
+    };
+    const flushQueue = () => {
+      for (const msg of queuedMessages) {
+        if (msg.type === 'added-event') {
+          this.eventItems.set(msg.item.eventId, msg.item);
+        } else if (msg.type === 'updated-event') {
+          this.eventItems.set(msg.item.eventId, msg.item);
+        } else if (msg.type === 'removed-event') {
+          this.eventItems.delete(msg.itemId);
+        }
+        this.config.eventsDataCallback(msg);
+      }
+    };
+    return {
+      flushQueue,
+      handlers: {
+        eventAdded,
+        eventUpdated,
+        eventRemoved,
+      },
+    };
+  }
+
+  private callbackMethodHandlers() {
+    const eventAdded = (item: EventItem) => {
+      this.eventItems.set(item.eventId, item);
+      this.config.eventsDataCallback({
+        type: 'added-event',
+        item,
+      });
+    };
+    const eventUpdated = (item: EventItem) => {
+      this.eventItems.set(item.eventId, item);
+      this.config.eventsDataCallback({
+        type: 'updated-event',
+        item,
+      });
+    };
+    const eventRemoved = (item: EventItem) => {
+      this.eventItems.delete(item.eventId);
+      this.config.eventsDataCallback({
+        type: 'removed-event',
+        itemId: item.eventId,
+      });
+    };
+    return {
+      handlers: {
+        eventAdded,
+        eventUpdated,
+        eventRemoved,
+      },
+    };
+  }
+
+  private async getAllEvents() {
+    const rsp = await fetch(this.config.allEventsEndPoint);
+    if (!rsp.ok) {
+      throw new Error(`HTTP error ${rsp.status} ${rsp.statusText}`);
+    }
+    const data: EventItem[] = await rsp.json();
+    return data;
+  }
 }

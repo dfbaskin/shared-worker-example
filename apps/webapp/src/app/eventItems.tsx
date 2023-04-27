@@ -1,16 +1,8 @@
-import { useEffect, useState } from 'react';
-import { tap } from 'rxjs';
-import { eventsStream, EventItem } from '@example/events';
+import { useEventItems } from '@example/events';
 import styles from './eventItems.module.scss';
 
 export function EventItems() {
-  const [items, setItems] = useState<EventItem[]>([]);
-
-  useEffect(() => {
-    const subscription = eventsStream.pipe(tap(setItems)).subscribe();
-    return () => subscription.unsubscribe();
-  }, []);
-
+  const { eventItems: items } = useEventItems();
   return (
     <div>
       <div>{items.length} event(s).</div>
