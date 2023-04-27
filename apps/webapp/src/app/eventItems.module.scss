@@ -13,3 +13,13 @@
     border: 1px solid #eee;
   }
 }
+
+.normalRow {
+  background-color: white;
+  transition: background-color 1.0s ease-in;
+}
+
+.recentUpdate {
+  background-color: lightblue;
+  transition: background-color 0.25s ease-in;
+}

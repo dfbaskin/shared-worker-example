@@ -1,4 +1,4 @@
-import { useEventItems } from '@example/events';
+import { useEventItems, formatDateText, isOlderThanSeconds } from '@example/events';
 import styles from './eventItems.module.scss';
 
 export function EventItems() {
@@ -13,18 +13,23 @@ export function EventItems() {
             <th>Id</th>
             <th>Name</th>
             <th>Description</th>
-            <th>Updated</th>
+            <th>Last Updated</th>
           </tr>
         </thead>
         <tbody>
-          {items.map((item) => (
-            <tr key={item.eventId}>
-              <td>{item.eventId}</td>
-              <td>{item.name}</td>
-              <td>{item.description}</td>
-              <td>{item.lastModifiedUTC}</td>
-            </tr>
-          ))}
+          {items.map((item) => {
+            const dateText = formatDateText(item.lastModifiedUTC);
+            const hasRecentUpdate = !isOlderThanSeconds(item.lastModifiedUTC, 1.0);
+            const updateClassName = hasRecentUpdate ? styles.recentUpdate : styles.normalRow;
+            return (
+              <tr key={item.eventId} className={updateClassName}>
+                <td>{item.eventId}</td>
+                <td>{item.name}</td>
+                <td>{item.description}</td>
+                <td>{dateText}</td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>
