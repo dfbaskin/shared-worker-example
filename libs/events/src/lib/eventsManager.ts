@@ -2,6 +2,7 @@ import { EventsConfig } from './eventConfig';
 import { EventItem } from './eventItem';
 import * as signalR from '@microsoft/signalr';
 import { EventsStreamDataTypes } from './eventsStreamDataTypes';
+import { deferred } from './deferred';
 
 interface MethodHandlers {
   eventAdded: (item: EventItem) => void;
@@ -14,6 +15,7 @@ export class EventsManager {
   private connection?: signalR.HubConnection;
   private methodHandlers?: MethodHandlers;
   private eventItems: Map<string, EventItem> = new Map();
+  private initialLoad = deferred<boolean>();
 
   constructor(private config: EventsConfig) {}
 
@@ -25,8 +27,9 @@ export class EventsManager {
 
     await this.connection.start();
 
-    const list = await this.getAllEvents();
+    const list = await this.getInitialListOfEvents();
     this.eventItems = new Map(list.map((item) => [item.eventId, item]));
+    this.initialLoad.resolve(true);
 
     queue.flushQueue();
     this.removeMethodHandlers();
@@ -41,12 +44,14 @@ export class EventsManager {
       this.removeMethodHandlers();
       this.enabled = false;
       this.eventItems.clear();
+      this.initialLoad = deferred();
       await this.connection.stop();
       this.connection = undefined;
     }
   }
 
-  getEventItems() {
+  async getEventItems() {
+    await this.initialLoad.promise;
     return [...this.eventItems.values()];
   }
 
@@ -155,7 +160,7 @@ export class EventsManager {
     };
   }
 
-  private async getAllEvents() {
+  private async getInitialListOfEvents() {
     const rsp = await fetch(this.config.allEventsEndPoint);
     if (!rsp.ok) {
       throw new Error(`HTTP error ${rsp.status} ${rsp.statusText}`);

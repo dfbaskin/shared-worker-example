@@ -1,5 +1,5 @@
 import * as Comlink from 'comlink';
-import { Subject, from, scan, switchMap } from 'rxjs';
+import { Subject, from, map, scan, switchMap } from 'rxjs';
 import { EventsStreamDataTypes } from './eventsStreamDataTypes';
 import { EventItem } from './eventItem';
 import { EventsManagerApi } from './eventsManagerApi';
@@ -20,8 +20,12 @@ export async function setEventsWorker(workerInstance: SharedWorker) {
   );
 }
 
+export interface EventsStreamState {
+  eventItems: EventItem[];
+}
+
 export const eventsStream = () => {
-  return from(workerApi!.getAllEvents()).pipe(
+  return from(requestAllEvents()).pipe(
     switchMap((eventItems) => {
       return eventItemsSubject.asObservable().pipe(
         scan(
@@ -40,7 +44,10 @@ export const eventsStream = () => {
               eventItems.map((item) => [item.eventId, item])
             ),
           }
-        )
+        ),
+        map(acc => ({
+          eventItems: [...acc.eventItems.values()]
+        }))
       );
     })
   );

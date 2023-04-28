@@ -1,26 +1,14 @@
 import { useEffect, useState } from 'react';
-import { eventsStream, requestAllEvents } from './eventsStream';
-import { EventItem } from './eventItem';
-import { from, switchMap, tap } from 'rxjs';
+import { EventsStreamState, eventsStream } from './eventsStream';
+import { tap } from 'rxjs';
 
 export function useEventItems() {
-  const [eventItems, setEventItems] = useState<EventItem[]>([]);
+  const [state, setState] = useState<EventsStreamState>({
+    eventItems: [],
+  });
   useEffect(() => {
-    const subscription = from(requestAllEvents())
-      .pipe(
-        tap(setEventItems),
-        switchMap(() =>
-          eventsStream().pipe(
-            tap((evts) => {
-              setEventItems([...evts.eventItems.values()]);
-            })
-          )
-        )
-      )
-      .subscribe();
+    const subscription = eventsStream().pipe(tap(setState)).subscribe();
     return () => subscription.unsubscribe();
   }, []);
-  return {
-    eventItems,
-  };
+  return state;
 }
