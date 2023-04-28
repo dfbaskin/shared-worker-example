@@ -27,10 +27,6 @@ export class EventsManager {
 
     const list = await this.getAllEvents();
     this.eventItems = new Map(list.map((item) => [item.eventId, item]));
-    this.config.eventsDataCallback({
-      type: 'all-events',
-      list: this.getEventItems(),
-    });
 
     queue.flushQueue();
     this.removeMethodHandlers();

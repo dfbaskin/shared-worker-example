@@ -1,41 +1,49 @@
+import * as Comlink from 'comlink';
 import { EventsManager } from './eventsManager';
 import {
   EventsStreamDataTypes,
-  EventsStreamRequestTypes,
 } from './eventsStreamDataTypes';
+import { EventsManagerApi } from './eventsManagerApi';
+import { Subject, Subscription, tap } from 'rxjs';
 
 const ctx = self as unknown as SharedWorkerGlobalScope;
 
-const allPorts = [] as MessagePort[];
+const eventsDataStream = new Subject<EventsStreamDataTypes>();
+
+function eventsWorkerServiceApiFactory(): EventsManagerApi {
+  let subscription: Subscription | undefined = undefined;
+  return {
+    onEventsChanged: (
+      callback: (eventsData: EventsStreamDataTypes) => void
+    ) => {
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+      subscription = eventsDataStream
+        .asObservable()
+        .pipe(
+          tap((eventsData) => {
+            callback(eventsData);
+          })
+        )
+        .subscribe();
+    },
+    getAllEvents: () => eventsManager.getEventItems(),
+  };
+}
 
 const eventsManager = new EventsManager({
   eventHubEndPoint: 'http://localhost:33033/api/EventsHub',
   allEventsEndPoint: 'http://localhost:33033/api/events',
   eventsDataCallback: (eventsData: EventsStreamDataTypes) => {
-    for (const port of allPorts) {
-      port.postMessage(eventsData);
-    }
+    eventsDataStream.next(eventsData);
   },
 });
 
 ctx.onconnect = function (evt) {
   const [port] = evt.ports;
-  allPorts.push(port);
-
-  port.onmessage = function (evt: MessageEvent<EventsStreamRequestTypes>) {
-    const { data } = evt;
-    if (data.type === 'get-all-events') {
-      const msg: EventsStreamDataTypes = {
-        type: 'all-events',
-        list: eventsManager.getEventItems(),
-      };
-      port.postMessage(msg);
-    } else {
-      console.log(
-        `Received unknown message in worker: ${JSON.stringify(data)}`
-      );
-    }
-  };
+  const eventsWorkerApi = eventsWorkerServiceApiFactory();
+  Comlink.expose(eventsWorkerApi, port);
 };
 
 eventsManager
