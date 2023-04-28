@@ -2,10 +2,10 @@ import { useEventItems, formatDateText, isOlderThanSeconds } from '@example/even
 import styles from './eventItems.module.scss';
 
 export function EventItems() {
-  const { eventItems: items } = useEventItems();
+  const { eventItems } = useEventItems();
   return (
     <div>
-      <div>{items.length} event(s).</div>
+      <div>{eventItems.length} event(s).</div>
 
       <table className={styles.table}>
         <thead>
@@ -17,7 +17,7 @@ export function EventItems() {
           </tr>
         </thead>
         <tbody>
-          {items.map((item) => {
+          {eventItems.map((item) => {
             const dateText = formatDateText(item.lastModifiedUTC);
             const hasRecentUpdate = !isOlderThanSeconds(item.lastModifiedUTC, 1.0);
             const updateClassName = hasRecentUpdate ? styles.recentUpdate : styles.normalRow;
